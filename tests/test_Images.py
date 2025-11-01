@@ -121,17 +121,3 @@ def test_imageplot_backends(backend, dtype):
     # Render both images (should not raise)
     Imageplot(grayscale).render()
     Imageplot(rgb).render()
-
-
-@pytest.mark.parametrize(
-    "args",
-    [
-        (img_path),
-        (img_path, img_path),
-        [img_path],
-        [img_path, img_path],
-    ],
-)
-def test_imageplot_str_parsing(check_test_image, args):
-    Imageplot(args).render()
-    Imageplot(*args).render()

@@ -91,7 +91,6 @@ def test_imageplot_example_01(snapshot, capsys):
 
 def test_imageplot_example_02(snapshot, capsys, monkeypatch):
     # Without kitty protocol
-    monkeypatch.setenv("ASCII", "1")
-    Imageplot("media/monarch.png").render()
+    Imageplot("media/monarch.png", force_ascii=True).render()
     captured = capsys.readouterr()
     snapshot.assert_match(captured.out, "Imageplot_Example_02.txt")
