@@ -17,8 +17,20 @@ class ColorType(IntEnum):
     PURPLE = 129
 
     @classmethod
-    def _missing_(cls, value):
-        """Allow creation from any integer while preserving enum benefits"""
+    def from_string(cls, value):
+        """Convert string to ColorType, case-insensitive"""
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, int):
+            try:
+                return cls(value)
+            except ValueError:
+                return cls.INVALID
+        if isinstance(value, str):
+            try:
+                return cls[value.upper()]
+            except KeyError:
+                return cls.INVALID
         return cls.INVALID
 
     def ansi_prefix(self) -> str:
