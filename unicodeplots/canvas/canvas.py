@@ -1,132 +1,207 @@
-import math
-from abc import ABC, abstractmethod
-from typing import Any, Callable, List
+from typing import Callable, Optional, Protocol, runtime_checkable
 
-from unicodeplots.utils import CanvasParams, Color, ColorType
+from unicodeplots.utils import ColorType
 
 
-class Canvas(ABC):
-    _x_pixels = 1
-    _y_pixels = 1
-    default_char = 0x2800
-    default_color = Color.WHITE
+@runtime_checkable
+class PlotStyle(Protocol):
+    def adjust_grid(self, canvas: "Canvas") -> None:
+        """Let style configure canvas pixel dimensions."""
+        ...
 
-    def __init__(self, **kwargs):
-        self._params = CanvasParams(**kwargs)
+    def set_pixel(self, canvas: "Canvas", px: int, py: int, color: int) -> None:
+        """Draw a pixel at the given pixel coordinates."""
+        ...
 
-        # Calculate pixel dimensions based on logical dimensions and resolution
-        self.pixel_width = math.ceil(self.width * self.resolution)
-        self.pixel_height = math.ceil(self.height * self.resolution)
 
-        # Ensure pixel dimensions are multiples of character cell dimensions
-        self.pixel_width = self._align_to_char_length(self.pixel_width)
-        self.pixel_height = self._align_to_char_length(self.pixel_height)
+class LineStyle(PlotStyle):
+    def __init__(self):
+        self.x_pixels_per_char = 2
+        self.y_pixels_per_char = 4
+        self.bit_table = [
+            [0x01, 0x02, 0x04, 0x40],  # x=0
+            [0x08, 0x10, 0x20, 0x80],  # x=1
+        ]
 
-        self.active_cells: List[List[Any]] = [[] for _ in range(self.grid_rows)]
-        self.active_colors: List[List[ColorType]] = [[] for _ in range(self.grid_rows)]
+    def adjust_grid(self, canvas: "Canvas") -> None:
+        canvas.x_pixels_per_char = self.x_pixels_per_char
+        canvas.y_pixels_per_char = self.y_pixels_per_char
 
-    def _align_to_char_length(self, length: int) -> int:
-        """Ensure length is aligned to character cell boundaries"""
-        remainder = length % self.x_pixel_per_char
-        if remainder > 0:
-            return length + (self.x_pixel_per_char - remainder)
-        return length
+    def set_pixel(
+        self,
+        canvas: "Canvas",
+        px: int,
+        py: int,
+        color: int,
+    ) -> None:
+        """Set a Braille pixel using bit manipulation."""
+        # Convert pixel coords to character coords
+        cx = px // canvas.x_pixels_per_char
+        cy = py // canvas.y_pixels_per_char
 
-    @property
-    def x_pixel_per_char(self) -> int:
-        return self._x_pixels
+        if not (0 <= cx < canvas.width and 0 <= cy < canvas.height):
+            return
 
-    @property
-    def y_pixel_per_char(self) -> int:
-        return self._y_pixels
+        # Find position within the character (0-1 for x, 0-3 for y)
+        x_in = px % canvas.x_pixels_per_char
+        y_in = py % canvas.y_pixels_per_char
 
-    @property
-    def grid_cols(self) -> int:
-        return self.pixel_width // self.x_pixel_per_char
+        bit = self.bit_table[x_in][y_in]
+        canvas.grid[cy][cx] |= bit
+        canvas.colors[cy][cx] = color
 
-    @property
-    def grid_rows(self) -> int:
-        return self.pixel_height // self.y_pixel_per_char
 
-    @abstractmethod
-    def line(self, x1: float, y1: float, x2: float, y2: float, color: ColorType):
-        """Draw a line between logical coordinates (x1,y1) and (x2,y2)"""
+class MarkerStyle(PlotStyle):
+    def __init__(self, marker: str = "•"):
+        self.x_pixels_per_char = 1
+        self.y_pixels_per_char = 1
+        self.marker = marker
 
-    @abstractmethod
-    def render(self) -> str:
-        """Rendering of canvas to string"""
+    def adjust_grid(self, canvas: "Canvas") -> None:
+        """Set canvas pixel dimensions for markers."""
+        canvas.x_pixels_per_char = self.x_pixels_per_char
+        canvas.y_pixels_per_char = self.y_pixels_per_char
+
+    def set_pixel(self, canvas: "Canvas", px: int, py: int, color: int) -> None:
+        """Set a marker character at the given position."""
+        # Convert pixel coords to character coords
+        cx = px // self.x_pixels_per_char
+        cy = py // self.y_pixels_per_char
+
+        if not (0 <= cx < canvas.width and 0 <= cy < canvas.height):
+            return
+
+        canvas.grid[cy][cx] = ord(self.marker)
+        canvas.colors[cy][cx] = color
+
+
+class Canvas:
+    _SUPERSAMPLE: int = 8
+
+    def __init__(
+        self,
+        width: int = 80,
+        height: int = 24,
+        x_min: float = 0.0,
+        x_max: float = 1.0,
+        y_min: float = 0.0,
+        y_max: float = 1.0,
+        style: Optional[PlotStyle] = None,
+        x_flip: bool = False,
+        y_flip: bool = False,
+        x_scale: Callable[[float], float] = lambda x: x,
+        y_scale: Callable[[float], float] = lambda y: y,
+    ):
+        # Display dimensions
+        self.width = width
+        self.height = height
+        self.x_pixels_per_char: int = 1
+        self.y_pixels_per_char: int = 1
+        self.x_scale = x_scale
+        self.y_scale = y_scale
+
+        # Data bounds (respect scaling)
+        self.x_min = self.x_scale(x_min)
+        self.x_max = self.x_scale(x_max)
+        if self.x_min > self.x_max:
+            self.x_min, self.x_max = self.x_max, self.x_min
+
+        self.y_min = self.y_scale(y_min)
+        self.y_max = self.y_scale(y_max)
+        if self.y_min > self.y_max:
+            self.y_min, self.y_max = self.y_max, self.y_min
+
+        self.x_range = self.x_max - self.x_min or 1e-9
+        self.y_range = self.y_max - self.y_min or 1e-9
+
+        # Flips
+        self.x_flip = x_flip
+        self.y_flip = y_flip
+
+        # Style determines pixel dimensions and how to draw
+        self.style = style or LineStyle()
+        self.style.adjust_grid(self)
+
+        # Calculate pixel dimensions based on style
+        self.pixel_width = width * self.x_pixels_per_char
+        self.pixel_height = height * self.y_pixels_per_char
+
+        # Create grids
+        self.grid = [[0x2800] * width for _ in range(height)]
+        self.colors = [[0] * width for _ in range(height)]
 
     def x_to_pixel(self, x: float) -> float:
-        """Convert logical x coordinate to pixel space"""
-        if self.xflip:
-            return (1 - (x - self.origin_x) / self.width) * self.pixel_width
-        return ((x - self.origin_x) / self.width) * self.pixel_width
+        """Convert data x coordinate to pixel space"""
+        x_scaled = self.x_scale(x)
+        normalized = (x_scaled - self.x_min) / self.x_range  # 0 to 1
+        if self.x_flip:
+            normalized = 1 - normalized
+        return normalized * self.pixel_width
 
     def y_to_pixel(self, y: float) -> float:
-        """Convert logical y coordinate to pixel space"""
-        if self.yflip:
-            return (y - self.origin_y) / self.height * self.pixel_height
-        return (1 - (y - self.origin_y) / self.height) * self.pixel_height
+        """Convert data y coordinate to pixel space"""
+        y_scaled = self.y_scale(y)
+        normalized = (y_scaled - self.y_min) / self.y_range
+        # Y grows down in screen space, so `1-` by default
+        normalized = normalized if self.y_flip else 1 - normalized
+        return normalized * self.pixel_height
 
-    @property
-    def params(self) -> CanvasParams:
-        """Get the full parameters object"""
-        return self._params
+    def set_pixel(self, x: float, y: float, color: int):
+        """Set a pixel at data coordinates."""
+        px = int(self.x_to_pixel(x))
+        py = int(self.y_to_pixel(y))
+        self.style.set_pixel(self, px, py, color)
 
-    @property
-    def width(self) -> int:
-        """Get the logical width of the canvas"""
-        return self._params.width
+    def _draw_bresenham_segment(self, px1: int, py1: int, px2: int, py2: int, color: int):
+        """Draws a single line segment using Bresenham given INTEGER pixel coordinates."""
 
-    @property
-    def height(self) -> int:
-        """Get the logical height of the canvas"""
-        return self._params.height
+        dx = abs(px2 - px1)
+        dy = abs(py2 - py1)
+        sx = 1 if px1 < px2 else -1
+        sy = 1 if py1 < py2 else -1
+        err = dx - dy
 
-    @property
-    def rows(self) -> int:
-        """Returns the number of active rows in the canvas."""
-        if self.cols:
-            return len(self.active_cells[0])
-        else:
-            return 0
+        pixels = set()
+        px_curr, py_curr = px1, py1
 
-    @property
-    def cols(self) -> int:
-        """Returns the number of active columns in the canvas."""
-        return len(self.active_cells)
+        while True:
+            pixels.add((px_curr, py_curr))
 
-    @property
-    def resolution(self) -> float:
-        """Get the pixel resolution"""
-        return self._params.resolution
+            if px_curr == px2 and py_curr == py2:
+                break
 
-    @property
-    def origin_x(self) -> float:
-        """Get the x-origin coordinate"""
-        return self._params.origin_x
+            e2 = 2 * err
+            if e2 > -dy:
+                err -= dy
+                px_curr += sx
+            if e2 < dx:
+                err += dx
+                py_curr += sy
 
-    @property
-    def origin_y(self) -> float:
-        """Get the y-origin coordinate"""
-        return self._params.origin_y
+        # Set the actual pixels on the canvas
+        for p_x, p_y in pixels:
+            self.style.set_pixel(self, p_x, p_y, color)
 
-    @property
-    def xflip(self) -> bool:
-        """Get the x-flip setting"""
-        return self._params.xflip
+    def line(self, x1: float, y1: float, x2: float, y2: float, color: int):
+        """Draw a line between logical coordinates using Bresenham for smoother curves"""
+        px1 = self.x_to_pixel(x1)
+        py1 = self.y_to_pixel(y1)
+        px2 = self.x_to_pixel(x2)
+        py2 = self.y_to_pixel(y2)
 
-    @property
-    def yflip(self) -> bool:
-        """Get the y-flip setting"""
-        return self._params.yflip
+        # Standard Bresenham at high resolution
+        px1, py1 = int(round(px1)), int(round(py1))
+        px2, py2 = int(round(px2)), int(round(py2))
 
-    @property
-    def xscale(self) -> Callable[[float], float]:
-        """Get the x-scaling function"""
-        return self._params.xscale
+        self._draw_bresenham_segment(px1, py1, px2, py2, color)
 
-    @property
-    def yscale(self) -> Callable[[float], float]:
-        """Get the y-scaling function"""
-        return self._params.yscale
+    def render(self) -> str:
+        """Convert grid to string."""
+        lines = []
+        for row in range(self.height):
+            line = ""
+            for col in range(self.width):
+                char = chr(self.grid[row][col])
+                line += ColorType(self.colors[row][col]).apply(char)
+            lines.append(line)
+        return "\n".join(lines)

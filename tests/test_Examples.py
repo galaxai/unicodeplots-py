@@ -17,27 +17,16 @@ def test_lineplot_example_01(snapshot):
     """
     x = [-1, 2, 3, 7]
     y = [-1, 2, 9, 4]
-    plot = Lineplot(x, y, title="Simple Plot", xlabel="x", ylabel="x", border="single")
-    output = plot.render()
+    plot = Lineplot(x, y)
+    output = plot.plot()
 
     snapshot.assert_match(output, "Lineplot_Example_01.txt")
 
 
 def test_lineplot_example_02(snapshot):
-    x_vals = [x / 10 for x in range(-31, 62)]
-    plot = Lineplot(
-        x_vals,
-        math.sin,
-        x_vals,
-        math.cos,
-        width=80,
-        height=60,
-        show_axes=True,
-        border="single",
-        xlabel="x",
-        ylabel="f(x)",
-    )
-    output = plot.render()
+    x_vals = [x / 100 for x in range(-310, 620)]
+    plot = Lineplot(x=x_vals, y=[math.sin, math.cos])
+    output = plot.plot()
     snapshot.assert_match(output, "Lineplot_Example_02.txt")
 
 
@@ -46,8 +35,8 @@ def test_lineplot_example_03(snapshot):
     x = [uniform(-5, 5) for _ in range(100)]
     y = [uniform(-5, 5) for _ in range(100)]
 
-    plot = Lineplot(x, y, scatter=True, border="single", title="Random Scatter Plot", show_axes=True)
-    output = plot.render()
+    plot = Lineplot(x, y)
+    output = plot.plot(scatter=True)
     snapshot.assert_match(output, "Lineplot_Example_03.txt")
 
 
@@ -59,19 +48,13 @@ def test_lineplot_example_04(snapshot):
     y1 = [uniform(-5, 5) for _ in range(100)]
 
     plot = Lineplot(
-        x,
-        y,
-        x1,
-        y1,
-        width=40,
-        height=20,
-        scatter=True,
-        border="single",
-        marker=["*", "x"],
-        title="Scatter Plot w Marker",
-        show_axes=True,
+        x=[x, x1],
+        y=[y, y1],
     )
-    output = plot.render()
+    output = plot.plot(
+        scatter=True,
+        marker=["*", "x"],
+    )
     snapshot.assert_match(output, "Lineplot_Example_04.txt")
 
 

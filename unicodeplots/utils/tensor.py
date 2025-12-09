@@ -1,7 +1,4 @@
-import os
 from collections.abc import Iterable
-
-os.environ["CPU"] = "1"
 
 
 def forward_op(name):
