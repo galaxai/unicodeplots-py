@@ -72,7 +72,7 @@ def test_imageplot_example_01(snapshot, capsys):
     snapshot.assert_match(captured.out, "Imageplot_Example_01.txt")
 
 
-def test_imageplot_example_02(snapshot, capsys, monkeypatch):
+def test_imageplot_example_02(snapshot, capsys):
     # Without kitty protocol
     Imageplot("media/monarch.png", force_ascii=True).render()
     captured = capsys.readouterr()

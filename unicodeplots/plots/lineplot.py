@@ -1,5 +1,3 @@
-from typing import Sequence
-
 from unicodeplots.canvas import Canvas, LineStyle, MarkerStyle
 from unicodeplots.utils import ColorType
 
@@ -7,8 +5,8 @@ from unicodeplots.utils import ColorType
 class Lineplot:
     def __init__(
         self,
-        x=None,  # What is x
-        y=None,  # What is y
+        x=None,
+        y=None,
     ):
         self.points = self._validate_input(x, y)
         self._compute_bounds()
@@ -49,20 +47,23 @@ class Lineplot:
                     x2, y2 = line[i]
                     canvas.line(x1, y1, x2, y2, color=colors_codes[idx % len(colors_codes)])
 
-        print(canvas.render())
-        return canvas.render()
+        rendered = canvas.render()
+        print(rendered)
+        return rendered
 
     def _compute_bounds(self):
+        if not self.points or all(len(line) == 0 for line in self.points):
+            raise ValueError("Cannot compute bounds with no data points")
         x_values = [point[0] for line in self.points for point in line]
         y_values = [point[1] for line in self.points for point in line]
         self.min_x, self.max_x = min(x_values), max(x_values)
         self.min_y, self.max_y = min(y_values), max(y_values)
 
-    def _validate_input(self, x, y) -> list[Sequence[tuple[int | float, int | float]]]:
+    def _validate_input(self, x, y) -> list[list[tuple[int | float, int | float]]]:
         if x is None or y is None:
             raise ValueError("Both x and y are required")
 
-        points: list[Sequence[tuple[int | float, int | float]]] = []
+        points: list[list[tuple[int | float, int | float]]] = []
 
         # Checks if x = [x,x1] where x1 is a list[int] and y = [y,y1] where y1 is a list[int]
         if isinstance(x, (list, tuple)) and x and isinstance(x[0], (list, tuple)):

@@ -76,8 +76,6 @@ class MarkerStyle(PlotStyle):
 
 
 class Canvas:
-    _SUPERSAMPLE: int = 8
-
     def __init__(
         self,
         width: int = 80,
