@@ -1,4 +1,3 @@
-from unicodeplots.canvas.braile import BrailleCanvas, LineStyle, MarkerStyle
-from unicodeplots.canvas.canvas import Canvas
+from unicodeplots.canvas.canvas import Canvas, LineStyle, MarkerStyle
 
-__all__ = ["Canvas", "BrailleCanvas", "LineStyle", "MarkerStyle"]
+__all__ = ["Canvas", "LineStyle", "MarkerStyle"]
