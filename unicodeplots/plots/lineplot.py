@@ -49,6 +49,7 @@ class Lineplot:
 
         rendered = canvas.render()
         print(rendered)
+        return rendered
 
     def _compute_bounds(self):
         if not self.points or all(len(line) == 0 for line in self.points):
